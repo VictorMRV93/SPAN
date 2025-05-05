@@ -1,0 +1,58 @@
+import csv
+import os
+ 
+def corrigir_coordenada(coord):
+    """
+    Corrige valores de coordenadas geográficas problemáticos.
+    """
+    # Remove caracteres não numéricos exceto sinal negativo e ponto/vírgula decimal
+    coord_limpa = ''.join(c for c in str(coord) if c in '-.,1234567890')
+    # Substitui vírgula por ponto para padronizar formato decimal
+    coord_limpa = coord_limpa.replace(',', '.')
+    try:
+        valor = float(coord_limpa)
+        # Correção para valores claramente fora do intervalo geográfico
+        if abs(valor) > 180:
+            # Reduz o valor dividindo por 10 até ficar dentro do intervalo válido
+            while abs(valor) > 90:
+                valor = valor / 10
+            return f"{valor:.6f}"
+        return coord_limpa
+    except ValueError:
+        # Retorna zero se não for possível converter
+        return "0.0"
+ 
+# Obter o diretório atual do script
+diretorio_atual = os.path.dirname(os.path.abspath(__file__))
+caminho_entrada = os.path.join(diretorio_atual, 'municipios.csv')
+caminho_saida = os.path.join(diretorio_atual, 'municipios_coord_corrigidas.csv')
+ 
+# Tentar diferentes codificações comuns para arquivos brasileiros
+codificacoes = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+ 
+for codificacao in codificacoes:
+    try:
+        with open(caminho_entrada, 'r', encoding=codificacao) as arquivo_entrada, \
+             open(caminho_saida, 'w', encoding='utf-8', newline='') as arquivo_saida:
+            leitor = csv.reader(arquivo_entrada, delimiter=';')
+            escritor = csv.writer(arquivo_saida, delimiter=';')
+            # Escrever cabeçalho sem modificações
+            cabecalho = next(leitor)
+            escritor.writerow(cabecalho)
+            # Processar cada linha
+            for linha in leitor:
+                if len(linha) >= 5:  # Garantir que tem colunas de latitude e longitude
+                    # Corrigir latitude (coluna 3) e longitude (coluna 4)
+                    linha[3] = corrigir_coordenada(linha[3])
+                    linha[4] = corrigir_coordenada(linha[4])
+                escritor.writerow(linha)
+        print(f"Arquivo processado com sucesso usando codificação {codificacao}")
+        print(f"Arquivo com coordenadas corrigidas salvo em: {caminho_saida}")
+        break
+ 
+    except UnicodeDecodeError:
+        continue
+    except Exception as e:
+        print(f"Ocorreu um erro com a codificação {codificacao}: {str(e)}")
+else:
+    print("Não foi possível ler o arquivo com nenhuma das codificações testadas.")
