@@ -1,73 +1,61 @@
+
 import pandas as pd
-import streamlit as st
+import os
+import subprocess
 
-st.title("📊 Alocação de Cargos")
+# Caminho da pasta onde o script está sendo executado
+caminho_pasta = os.path.dirname(os.path.abspath(__file__))
 
-# Upload de arquivos
-df_base_file = st.file_uploader("📎 Envie o arquivo de alocação", type=["xlsx"])
-df_clusters_file = st.file_uploader("📎 Envie o arquivo de clusters (Tabelas_Projeto.xlsx)", type=["xlsx"])
+# Ler os arquivos
+df_base = pd.read_excel(os.path.join(caminho_pasta, "Alocacao_Todos_Cenarios_Corrigido_AnalistaGI_EPL_OK.xlsx"))
+df_clusters = pd.read_excel(os.path.join(caminho_pasta, "Tabelas_Projeto.xlsx"), sheet_name="TabelaCluster")
 
-if df_base_file and df_clusters_file:
-    df_base = pd.read_excel(df_base_file)
-    df_clusters = pd.read_excel(df_clusters_file, sheet_name="TabelaCluster")
+# Capacidade por cargo
+capacidade = {
+    "AUXILIAR APROVADOR": 10,
+    "ANALISTA GI": 9
+}
 
-    # Capacidade por cargo
-    capacidade = {
-        "AUXILIAR APROVADOR": 10,
-        "ANALISTA GI": 9,
-        "EPL": {
-            "Cenário Múltiplos Sem Sensibilidade": 24,
-            "Cenário Sensível P&C/URB/HBT": 28,
-            "Cenário Sensível Todos Cargos": 20
-        }
-    }
+# DataFrame acumulador
+df_completo = pd.DataFrame()
 
-    df_completo = pd.DataFrame()
+# Iterar sobre os cenários
+for cenario in df_base["Cenário"].unique():
+    df_cenario = df_base[df_base["Cenário"] == cenario].copy()
+    df_cenario = df_cenario[~df_cenario["Cargo"].isin(["CONSULTOR MO", "CONSULTOR MAT"])]  # Remove consultores MO/MAT
 
-    for cenario in df_base["Cenário"].unique():
-        df_cenario = df_base[df_base["Cenário"] == cenario].copy()
-        df_cenario = df_cenario[~df_cenario["Cargo"].isin(["CONSULTOR MO", "CONSULTOR MAT"])]
+    regionais = df_cenario["Regional"].unique()
 
-        regionais = df_cenario["Regional"].unique()
-
-        novos_regionais = [
-            (reg, "Todos da Regional", 0, "Reports", "ANALISTA DE REPORTS", 1, cenario)
-            for reg in regionais
-        ] + [
+    novos_regionais = []
+    for reg in regionais:
+        novos_regionais.extend([
+            (reg, "Todos da Regional", 0, "Reports", "ANALISTA DE REPORTS", 1, cenario),
             (reg, "Todos da Regional", 0, "Suporte", "COORDENADOR DE SUPORTE", 1, cenario)
-            for reg in regionais
-        ]
+        ])
 
-        novos_clusters = []
-        for _, row in df_clusters.iterrows():
-            regional = row["Regional"]
-            cluster = row["CLUSTER CORRIGID"]
-            obras = row["Obras"]
+    novos_clusters = []
+    for _, row in df_clusters.iterrows():
+        regional = row["Regional"]
+        cluster = row["CLUSTER CORRIGID"]
+        obras = row["Obras"]
 
-            qtd_aprovador = -(-obras // capacidade["AUXILIAR APROVADOR"])  # arredonda pra cima
-            qtd_gi = -(-obras // capacidade["ANALISTA GI"])
-            qtd_epl = -(-obras // capacidade["EPL"][cenario])
+        qtd_aprovador = obras // capacidade["AUXILIAR APROVADOR"] + (1 if obras % capacidade["AUXILIAR APROVADOR"] > 0 else 0)
+        qtd_gi = obras // capacidade["ANALISTA GI"] + (1 if obras % capacidade["ANALISTA GI"] > 0 else 0)
 
-            novos_clusters.extend([
-                (regional, cluster, obras, "Aprovação", "AUXILIAR APROVADOR", qtd_aprovador, cenario),
-                (regional, cluster, obras, "GI", "ANALISTA GI", qtd_gi, cenario),
-                (regional, cluster, obras, "P&C", "EPL", qtd_epl, cenario),
-            ])
+        novos_clusters.extend([
+            (regional, cluster, obras, "Aprovação", "AUXILIAR APROVADOR", qtd_aprovador, cenario),
+            (regional, cluster, obras, "GI", "ANALISTA GI", qtd_gi, cenario),
+        ])
 
-        df_novos = pd.DataFrame(novos_regionais + novos_clusters, columns=df_cenario.columns)
-        df_cenario_final = pd.concat([df_cenario, df_novos], ignore_index=True)
-        df_completo = pd.concat([df_completo, df_cenario_final], ignore_index=True)
+    df_novos = pd.DataFrame(novos_regionais + novos_clusters, columns=df_cenario.columns)
+    df_cenario_final = pd.concat([df_cenario, df_novos], ignore_index=True)
+    df_completo = pd.concat([df_completo, df_cenario_final], ignore_index=True)
 
-    # Mostrar dados
-    st.success("✅ Processamento concluído!")
-    st.write("📄 Resultado da alocação:")
-    st.dataframe(df_completo)
+# Exportar
+nome_saida = "Alocacao_Todos_Cenarios_Sem_EPL.xlsx"
+caminho_saida = os.path.join(caminho_pasta, nome_saida)
+df_completo.to_excel(caminho_saida, index=False)
 
-    # Download
-    from io import BytesIO
-    output = BytesIO()
-    df_completo.to_excel(output, index=False, engine='openpyxl')
-    st.download_button("📥 Baixar resultado", data=output.getvalue(), file_name="Alocacao_Todos_Cenarios_Final.xlsx")
-
-else:
-    st.warning("⚠️ Por favor, envie os dois arquivos para começar.")
+# Abrir Excel automaticamente
+subprocess.run(["start", "excel", caminho_saida], shell=True)
+print(f"Arquivo gerado com sucesso: {caminho_saida}")
