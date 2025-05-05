@@ -62,7 +62,7 @@ if df_base_file and df_clusters_file:
                 (reg, "Todos da Regional", obras_reg, "URB", "ANALISTA URB", int(qtd_urb), cenario)
             ])
 
-        # Cálculo por cluster para GI
+        # Cálculo por cluster apenas para ANALISTA GI
         novos_clusters = []
         for _, row in df_clusters.iterrows():
             regional = row["Regional"]
@@ -71,11 +71,11 @@ if df_base_file and df_clusters_file:
             qtd_gi = -(-obras // capacidade_gi)
             novos_clusters.append((regional, cluster, obras, "GI", "ANALISTA GI", qtd_gi, cenario))
 
-        # Juntar tudo
+        # Unir regionais e clusters
         df_novos = pd.DataFrame(novos_regionais + novos_clusters, columns=df_cenario.columns)
         df_cenario_final = pd.concat([df_cenario, df_novos], ignore_index=True)
 
-        # Remover duplicatas internas mantendo o maior valor
+        # Remover duplicatas internas por cargo/cenário/localização
         df_cenario_final = (
             df_cenario_final
             .sort_values("Quantidade", ascending=False)
@@ -84,7 +84,6 @@ if df_base_file and df_clusters_file:
 
         df_completo = pd.concat([df_completo, df_cenario_final], ignore_index=True)
 
-    # Exibir resultado final
     st.success("✅ Processamento concluído!")
     st.write("📄 Resultado final da alocação:")
     st.dataframe(df_completo)
