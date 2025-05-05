@@ -12,17 +12,24 @@ if df_base_file and df_clusters_file:
     df_base = pd.read_excel(df_base_file)
     df_clusters = pd.read_excel(df_clusters_file, sheet_name="TabelaCluster")
 
-    # Capacidade por cargo (sem EPL)
+    # Capacidade por cargo
     capacidade = {
         "AUXILIAR APROVADOR": 10,
-        "ANALISTA GI": 9
+        "ANALISTA GI": 9,
+        "ANALISTA MO": 10,
+        "ANALISTA MAT": 10,
     }
 
     df_completo = pd.DataFrame()
 
     for cenario in df_base["Cenário"].unique():
         df_cenario = df_base[df_base["Cenário"] == cenario].copy()
-        df_cenario = df_cenario[~df_cenario["Cargo"].isin(["CONSULTOR MO", "CONSULTOR MAT"])]
+
+        # Substituir CONSULTOR MO/MAT por ANALISTA MO/MAT
+        df_cenario["Cargo"] = df_cenario["Cargo"].replace({
+            "CONSULTOR MO": "ANALISTA MO",
+            "CONSULTOR MAT": "ANALISTA MAT"
+        })
 
         regionais = df_cenario["Regional"].unique()
 
@@ -40,12 +47,16 @@ if df_base_file and df_clusters_file:
             cluster = row["CLUSTER CORRIGID"]
             obras = row["Obras"]
 
-            qtd_aprovador = -(-obras // capacidade["AUXILIAR APROVADOR"])  # arredondamento para cima
+            qtd_aprovador = -(-obras // capacidade["AUXILIAR APROVADOR"])
             qtd_gi = -(-obras // capacidade["ANALISTA GI"])
+            qtd_mo = -(-obras // capacidade["ANALISTA MO"])
+            qtd_mat = -(-obras // capacidade["ANALISTA MAT"])
 
             novos_clusters.extend([
                 (regional, cluster, obras, "Aprovação", "AUXILIAR APROVADOR", qtd_aprovador, cenario),
-                (regional, cluster, obras, "GI", "ANALISTA GI", qtd_gi, cenario)
+                (regional, cluster, obras, "GI", "ANALISTA GI", qtd_gi, cenario),
+                (regional, cluster, obras, "MO", "ANALISTA MO", qtd_mo, cenario),
+                (regional, cluster, obras, "MAT", "ANALISTA MAT", qtd_mat, cenario)
             ])
 
         df_novos = pd.DataFrame(novos_regionais + novos_clusters, columns=df_cenario.columns)
@@ -60,7 +71,7 @@ if df_base_file and df_clusters_file:
     # Download
     output = BytesIO()
     df_completo.to_excel(output, index=False, engine='openpyxl')
-    st.download_button("📥 Baixar resultado", data=output.getvalue(), file_name="Alocacao_Todos_Cenarios_Sem_EPL.xlsx")
+    st.download_button("📥 Baixar resultado", data=output.getvalue(), file_name="Alocacao_Todos_Cenarios_Atualizado.xlsx")
 
 else:
     st.warning("⚠️ Por favor, envie os dois arquivos para começar.")
